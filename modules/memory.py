@@ -1,19 +1,29 @@
 # modules/memory.py
+import os
 import json
-from langchain.vectorstores import Chroma
+import pickle
+from langchain.vectorstores import FAISS
 from langchain_openai import OpenAIEmbeddings
 
 VECTOR_DIR = "memory_store"
+INDEX_FILE = os.path.join(VECTOR_DIR, "faiss_memory.pkl")
 
 def get_memory():
-    return Chroma(
-        persist_directory=VECTOR_DIR,
-        collection_name="agent_memory",
-        embedding_function=OpenAIEmbeddings()
-    )
+    if os.path.exists(INDEX_FILE):
+        with open(INDEX_FILE, "rb") as f:
+            return pickle.load(f)
+    return None
+
+def save_memory(memory):
+    os.makedirs(VECTOR_DIR, exist_ok=True)
+    with open(INDEX_FILE, "wb") as f:
+        pickle.dump(memory, f)
 
 def lookup_summary(url: str):
     memory = get_memory()
+    if memory is None:
+        return None
+
     docs = memory.similarity_search(url, k=1)
     if docs and docs[0].metadata.get("url") == url:
         content = docs[0].page_content
@@ -24,14 +34,26 @@ def lookup_summary(url: str):
     return None
 
 def store_summary(url: str, data: dict):
-    memory = get_memory()
+    embeddings = OpenAIEmbeddings()
     summary_str = json.dumps(data)
-    memory.add_texts([summary_str], metadatas=[{"url": url}])
+    meta = {"url": url}
+
+    memory = get_memory()
+    if memory:
+        memory.add_texts([summary_str], metadatas=[meta])
+    else:
+        memory = FAISS.from_texts([summary_str], embedding=embeddings, metadatas=[meta])
+
+    save_memory(memory)
 
 def list_cached_urls():
     memory = get_memory()
+    if memory is None:
+        return []
     return memory.get()["metadatas"]
 
 def get_all_documents():
     memory = get_memory()
+    if memory is None:
+        return []
     return memory.get(include=["metadatas", "documents"])

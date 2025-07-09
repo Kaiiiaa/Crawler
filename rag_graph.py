@@ -4,14 +4,14 @@ from dotenv import load_dotenv
 from langgraph.graph import StateGraph, END
 from langchain_core.runnables import RunnableLambda
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-from langchain.vectorstores import Chroma
+from langchain.vectorstores import FAISS
 import requests
 from bs4 import BeautifulSoup
+from typing import TypedDict, Optional, List
+import pickle
 
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-
-from typing import TypedDict, Optional, List
 
 class RAGState(TypedDict):
     url: str
@@ -24,8 +24,7 @@ class RAGState(TypedDict):
     saved: Optional[bool]
     error: Optional[str]
 
-
-# Step 1: Fetch the page
+# --- Step 1: Fetch the page ---
 def fetch_page(state):
     url = state["url"]
     try:
@@ -35,8 +34,7 @@ def fetch_page(state):
     except Exception as e:
         return {"error": str(e), "html": "", "status": None, "redirects": 0}
 
-
-# Step 2: Simple inspection (CAPTCHA, block checks)
+# --- Step 2: Inspect page ---
 def inspect_page(state):
     html = state.get("html", "").lower()
     issues = []
@@ -52,17 +50,21 @@ def inspect_page(state):
 
     return {"inspection_notes": issues}
 
-
-# Step 3: RAG context retrieval
+# --- Step 3: Retrieve context using FAISS ---
 def retrieve_rag_context(state):
     embeddings = OpenAIEmbeddings()
-    vectorstore = Chroma(persist_directory="vectorstore", embedding_function=embeddings)
+
+    if not os.path.exists("vectorstore/faiss_index.pkl"):
+        return {"context": "⚠️ Vectorstore not found. No context retrieved."}
+
+    with open("vectorstore/faiss_index.pkl", "rb") as f:
+        vectorstore = pickle.load(f)
+
     retriever = vectorstore.as_retriever(search_kwargs={"k": 4})
     docs = retriever.get_relevant_documents(state["html"])
     return {"context": "\n\n".join([doc.page_content for doc in docs])}
 
-
-# Step 4: Final summary with LLM
+# --- Step 4: Summarize with LLM ---
 def summarize_with_llm(state):
     context = state["context"]
     html = state["html"]
@@ -87,8 +89,38 @@ Based on the above, explain what scraping challenges might exist on this site, a
     result = llm.invoke(prompt)
     return {"summary": result.content}
 
+# --- Step 5: Save to FAISS vectorstore ---
+def save_to_vectorstore(state):
+    summary = state["summary"]
+    url = state["url"]
+    notes = "\n".join(state.get("inspection_notes", []))
+    status = state.get("status", "Unknown")
+    html = state.get("html", "")[:2000]
 
-# Create LangGraph pipeline
+    metainfo = {
+        "url": url,
+        "status": status,
+        "notes": notes,
+    }
+
+    embeddings = OpenAIEmbeddings()
+    doc = [summary]
+    meta = [metainfo]
+
+    if os.path.exists("inspections_store/faiss_index.pkl"):
+        with open("inspections_store/faiss_index.pkl", "rb") as f:
+            vectorstore = pickle.load(f)
+        vectorstore.add_texts(doc, metadatas=meta)
+    else:
+        vectorstore = FAISS.from_texts(doc, embedding=embeddings, metadatas=meta)
+
+    os.makedirs("inspections_store", exist_ok=True)
+    with open("inspections_store/faiss_index.pkl", "wb") as f:
+        pickle.dump(vectorstore, f)
+
+    return {"saved": True}
+
+# --- Build LangGraph pipeline ---
 def create_graph():
     builder = StateGraph(RAGState)
 
@@ -106,28 +138,3 @@ def create_graph():
     builder.add_edge("save", END)
 
     return builder.compile()
-
-def save_to_vectorstore(state):
-    from langchain_openai import OpenAIEmbeddings
-    from langchain.vectorstores import Chroma
-
-    summary = state["summary"]
-    url = state["url"]
-    notes = "\n".join(state.get("inspection_notes", []))
-    status = state.get("status", "Unknown")
-    html = state.get("html", "")[:2000]
-
-    metainfo = {
-        "url": url,
-        "status": status,
-        "notes": notes,
-    }
-
-    vectorstore = Chroma(
-        persist_directory="inspections_store",
-        collection_name="page_inspections",
-        embedding_function=OpenAIEmbeddings()
-    )
-
-    vectorstore.add_texts([summary], metadatas=[metainfo])
-    return {"saved": True}

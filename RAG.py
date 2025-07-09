@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_openai import OpenAIEmbeddings
-from langchain_chroma import Chroma
+from langchain.vectorstores import FAISS
 from langchain_core.documents import Document
 from langchain.chains.summarize import load_summarize_chain
 from langchain.chat_models import ChatOpenAI
@@ -88,16 +88,12 @@ def load_and_split_pdfs(pdf_paths):
     return all_docs
 
 # --- Build vectorstore ---
-def build_vectorstore(all_docs, persist_dir=VECTORSTORE_DIR):
-    if not os.path.exists(persist_dir):
-        os.makedirs(persist_dir)
-
-    vectorstore = Chroma.from_documents(
+def build_vectorstore(all_docs):
+    vectorstore = FAISS.from_documents(
         documents=all_docs,
-        embedding=embeddings,
-        persist_directory=persist_dir
+        embedding=embeddings
     )
-    print(f"✅ Vectorstore built and saved to '{persist_dir}'.")
+    print(f"✅ FAISS vectorstore created in memory.")
 
 # --- Main execution ---
 if __name__ == "__main__":
