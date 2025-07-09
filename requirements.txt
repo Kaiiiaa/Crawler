@@ -1,0 +1,14 @@
+streamlit
+requests
+beautifulsoup4
+pandas
+openai
+playwright
+playwright-stealth
+langchain
+langchain-core
+langchain-openai
+langgraph
+chromadb
+python-dotenv
+tiktoken
