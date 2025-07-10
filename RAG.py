@@ -15,7 +15,7 @@ from tqdm import tqdm
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-INPUT_FOLDER = "input"
+INPUT_FOLDER = "pdf"
 PDF_FILES = [
     os.path.join(INPUT_FOLDER, f)
     for f in os.listdir(INPUT_FOLDER)
@@ -93,7 +93,8 @@ def build_vectorstore(all_docs):
         documents=all_docs,
         embedding=embeddings
     )
-    print(f"✅ FAISS vectorstore created in memory.")
+    vectorstore.save_local(VECTORSTORE_DIR)
+    print(f"✅ FAISS vectorstore saved to '{VECTORSTORE_DIR}'")
 
 # --- Main execution ---
 if __name__ == "__main__":
