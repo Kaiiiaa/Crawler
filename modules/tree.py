@@ -4,7 +4,6 @@ import pandas as pd
 import re
 import requests
 from bs4 import BeautifulSoup
-from playwright.sync_api import sync_playwright
 from langchain.callbacks import OpenAICallbackHandler
 from contextlib import contextmanager
 from agent import run_agent_task
@@ -95,12 +94,8 @@ def crawl(url, domain, visited, raw_links, link_sources, hierarchy_levels, paren
     tree = {}
 
     try:
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            page = browser.new_page()
-            page.goto(url, timeout=15000, wait_until='domcontentloaded')
-            content = page.content()
-            browser.close()
+        response = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
+        content = response.content
 
         soup = BeautifulSoup(content, "html.parser")
         count = 0
@@ -130,6 +125,7 @@ def crawl(url, domain, visited, raw_links, link_sources, hierarchy_levels, paren
         st.warning(f"Failed to crawl {url}: {e}")
 
     return tree
+
 
 def is_internal_link(href, domain):
     return domain in href and not href.startswith("#") and not href.startswith("javascript")

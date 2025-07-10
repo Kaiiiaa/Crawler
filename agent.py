@@ -15,28 +15,23 @@ import requests
 import gzip
 import io
 from lxml import etree
-from playwright.sync_api import sync_playwright
 
 os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
 
 @tool
 def crawl_tool(url: str) -> str:
-    """Extracts links from the given webpage using DOM scraping"""
+    """Extracts links from the given webpage using DOM scraping (no JS)"""
     try:
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            page = browser.new_page()
-            page.goto(url, timeout=15000, wait_until='domcontentloaded')
-            content = page.content()
-            browser.close()
-
-        soup = BeautifulSoup(content, "html.parser")
+        response = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
+        soup = BeautifulSoup(response.content, "html.parser")
         links = []
+
         for a in soup.find_all("a", href=True):
             href = urljoin(url, a["href"])
             text = a.get_text(strip=True)
             if href and text and len(text) > 2:
                 links.append(f"{text}: {href}")
+
         return "\n".join(links[:50]) or "No links found."
     except Exception as e:
         return f"DOM crawl failed: {str(e)}"
@@ -46,20 +41,15 @@ def crawl_tool(url: str) -> str:
 def embedded_json_tool(url: str) -> str:
     """Fetch embedded JSON (like navigation/category data) from a webpage"""
     try:
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            page = browser.new_page()
-            page.goto(url, timeout=15000, wait_until='domcontentloaded')
-            content = page.content()
-            browser.close()
+        response = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
+        soup = BeautifulSoup(response.content, "html.parser")
 
-        soup = BeautifulSoup(content, "html.parser")
         for script in soup.find_all("script"):
             if script.string and "{" in script.string:
                 json_start = script.string.find("{")
                 json_text = script.string[json_start:]
                 if len(json_text) > 200:
-                    return json_text[:1500]  
+                    return json_text[:1500]
         return "No JSON found."
     except Exception as e:
         return f"Failed to extract JSON: {str(e)}"
