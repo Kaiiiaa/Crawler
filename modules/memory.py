@@ -1,23 +1,18 @@
-# modules/memory.py
 import os
 import json
-import pickle
 from langchain.vectorstores import FAISS
 from langchain_openai import OpenAIEmbeddings
 
 VECTOR_DIR = "memory_store"
-INDEX_FILE = os.path.join(VECTOR_DIR, "faiss_memory.pkl")
 
 def get_memory():
-    if os.path.exists(INDEX_FILE):
-        with open(INDEX_FILE, "rb") as f:
-            return pickle.load(f)
+    embeddings = OpenAIEmbeddings()
+    if os.path.exists(os.path.join(VECTOR_DIR, "index.faiss")):
+        return FAISS.load_local(VECTOR_DIR, embeddings, allow_dangerous_deserialization=True)
     return None
 
 def save_memory(memory):
-    os.makedirs(VECTOR_DIR, exist_ok=True)
-    with open(INDEX_FILE, "wb") as f:
-        pickle.dump(memory, f)
+    memory.save_local(VECTOR_DIR)
 
 def lookup_summary(url: str):
     memory = get_memory()
