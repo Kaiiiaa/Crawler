@@ -57,9 +57,6 @@ def retrieve_rag_context(state):
     if not os.path.exists("vectorstore/faiss_index.pkl"):
         return {"context": "⚠️ Vectorstore not found. No context retrieved."}
 
-    with open("vectorstore/faiss_index.pkl", "rb") as f:
-        vectorstore = pickle.load(f)
-
     retriever = vectorstore.as_retriever(search_kwargs={"k": 4})
     docs = retriever.get_relevant_documents(state["html"])
     return {"context": "\n\n".join([doc.page_content for doc in docs])}
@@ -91,6 +88,9 @@ Based on the above, explain what scraping challenges might exist on this site, a
 
 # --- Step 5: Save to FAISS vectorstore ---
 def save_to_vectorstore(state):
+    import faiss  # needed if you're using FAISS
+    from langchain_openai import OpenAIEmbeddings
+
     summary = state["summary"]
     url = state["url"]
     notes = "\n".join(state.get("inspection_notes", []))
@@ -107,17 +107,17 @@ def save_to_vectorstore(state):
     doc = [summary]
     meta = [metainfo]
 
-    if os.path.exists("inspections_store/faiss_index.pkl"):
-        with open("inspections_store/faiss_index.pkl", "rb") as f:
-            vectorstore = pickle.load(f)
-        vectorstore.add_texts(doc, metadatas=meta)
+    store_dir = "inspections_store"
+    os.makedirs(store_dir, exist_ok=True)
+
+    # If FAISS index exists, load and update it
+    if os.path.exists(os.path.join(store_dir, "index.faiss")):
+        faiss_store = FAISS.load_local(store_dir, embeddings, allow_dangerous_deserialization=True)
+        faiss_store.add_texts(doc, metadatas=meta)
     else:
-        vectorstore = FAISS.from_texts(doc, embedding=embeddings, metadatas=meta)
+        faiss_store = FAISS.from_texts(doc, embedding=embeddings, metadatas=meta)
 
-    os.makedirs("inspections_store", exist_ok=True)
-    with open("inspections_store/faiss_index.pkl", "wb") as f:
-        pickle.dump(vectorstore, f)
-
+    faiss_store.save_local(store_dir)
     return {"saved": True}
 
 # --- Build LangGraph pipeline ---
