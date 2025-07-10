@@ -32,8 +32,8 @@ def run():
     # 👁 View existing memory entries
     st.subheader("📚 View Cached Summaries")
     docs = get_all_documents()
-    if docs["metadatas"]:
-        options = [d["url"] for d in docs["metadatas"]]
+    if docs:
+        options = [d.metadata.get("url", "Unknown") for d in docs]
         selected_url = st.selectbox("Choose a cached URL:", options)
 
         if selected_url:
