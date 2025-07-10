@@ -7,8 +7,15 @@ VECTOR_DIR = "memory_store"
 
 def get_memory():
     embeddings = OpenAIEmbeddings()
-    if os.path.exists(os.path.join(VECTOR_DIR, "index.faiss")):
-        return FAISS.load_local(VECTOR_DIR, embeddings, allow_dangerous_deserialization=True)
+    try:
+        if os.path.exists(os.path.join(VECTOR_DIR, "index.faiss")):
+            return FAISS.load_local(VECTOR_DIR, embeddings, allow_dangerous_deserialization=True)
+    except (EOFError, ValueError, OSError):
+        # corrupt or incomplete file — optionally delete it
+        os.remove(os.path.join(VECTOR_DIR, "index.faiss"))
+        if os.path.exists(os.path.join(VECTOR_DIR, "index.pkl")):
+            os.remove(os.path.join(VECTOR_DIR, "index.pkl"))
+        return None
     return None
 
 def save_memory(memory):
