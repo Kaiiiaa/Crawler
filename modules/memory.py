@@ -58,4 +58,11 @@ def get_all_documents():
     memory = get_memory()
     if memory is None:
         return []
-    return memory.get(include=["metadatas", "documents"])
+
+    # We'll simulate retrieval using dummy queries
+    # FAISS does not support direct access to "all documents"
+    try:
+        docs = memory.similarity_search(" ", k=1000)  # broad query
+        return docs
+    except Exception:
+        return []
